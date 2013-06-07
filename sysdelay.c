@@ -91,8 +91,7 @@ void init_signal_handler() {
     }
 }
 
-void
-ptrace_loop(thread *t)
+void ptrace_loop(thread *t)
 {
     attach(t->tid);
 
