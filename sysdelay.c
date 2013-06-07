@@ -1,5 +1,13 @@
 #include "sysdelay.h"
 
+void *xmalloc(size_t s) {
+    void *data = malloc(s);
+    if (data == NULL) {
+        err(1, "failed to malloc");
+    }
+    return data;
+}
+
 void * handle_ptrace_loop(void *arg) {
     thread *t = (thread *)arg;
     ptrace_loop(t);
@@ -7,16 +15,10 @@ void * handle_ptrace_loop(void *arg) {
 }
 
 void attach(pid_t tid) {
-    thread *t = malloc(sizeof(thread));
-    if (t == NULL) {
-        err(1, "failed to malloc");
-    }
+    thread *t     = xmalloc(sizeof(thread));
     t->tid        = tid;
     t->in_syscall = false;
-    t->pthread    = malloc(sizeof(pthread_t));
-    if(t->pthread == NULL) {
-        err(1, "failed to malloc");
-    }
+    t->pthread    = xmalloc(sizeof(pthread_t));
     pthread_create(t->pthread, NULL, handle_ptrace_loop, t);
 }
 
