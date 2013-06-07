@@ -368,4 +368,16 @@ pid_t gettid(void) {
     return syscall(SYS_gettid);
 }
 
+const char * syscall_name(long rax) {
+    return sysent[rax];
+}
+
+void signal_handler(int sig) {
+   _got_signal = true;
+}
+
+bool got_signal() {
+    return _got_signal;
+}
+
 #endif
