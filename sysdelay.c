@@ -1,18 +1,23 @@
 #include "sysdelay.h"
 
-void attach(pid_t tid) {
-    int rc = ptrace(PTRACE_ATTACH, tid, 0, 0);
-    if (rc == -1) {
-        err(1, "failed to ptrace(PTRACE_ATTACH, %d, ..)");
-    }
+void * handle_ptrace_loop(void *arg) {
+    thread *t = (thread *)arg;
+    ptrace_loop(t);
+    return NULL;
+}
 
+void attach(pid_t tid) {
     thread *t = malloc(sizeof(thread));
     if (t == NULL) {
         err(1, "failed to malloc");
     }
     t->tid        = tid;
     t->in_syscall = false;
-    HASH_ADD_INT(threads_attached, tid, t);
+    t->pthread    = malloc(sizeof(pthread_t));
+    if(t->pthread == NULL) {
+        err(1, "failed to malloc");
+    }
+    pthread_create(t->pthread, NULL, handle_ptrace_loop, t);
 }
 
 void detach(pid_t pid) {
@@ -22,13 +27,6 @@ void detach(pid_t pid) {
     }
 }
 
-thread * find_attached_thread(pid_t tid) {
-    thread *t;
-    HASH_FIND_INT(threads_attached, &tid, t);
-    return t;
-}
-
-/* from strace.c */
 static void attach_all_threads(pid_t pid) {
 
     char procdir[sizeof("/proc/%d/task") + sizeof(int) * 3];
@@ -46,7 +44,7 @@ static void attach_all_threads(pid_t pid) {
 
             if (de->d_fileno == 0)
                 continue;
-            /* we trust /proc filesystem */
+
             tid = atoi(de->d_name);
             if (tid <= 0)
                 continue;
@@ -101,19 +99,18 @@ void init_signal_handler() {
 }
 
 void
-ptrace_loop(pid_t pid, int delay) {
+ptrace_loop(thread *t)
+{
+    int rc = ptrace(PTRACE_ATTACH, t->tid, 0, 0);
+    if (rc == -1) {
+        err(1, "failed to ptrace(PTRACE_ATTACH, %d, ..)");
+    }
 
     while(!got_signal()){
         int status;
-        pid_t tid = waitpid(-1, &status, __WALL);
+        waitpid(t->tid, &status, __WALL);
         if (WIFEXITED(status)) {
-            warn("tid WIFEXITED: %d", tid);
-            break;
-        }
-
-        thread *t = find_attached_thread(tid);
-        if (t == NULL) {
-            warn("thread is not attached: %d", tid);
+            warn("tid WIFEXITED: %d", t->tid);
             break;
         }
 
@@ -125,13 +122,13 @@ ptrace_loop(pid_t pid, int delay) {
         }
 
         if (ignored_syscall(orig_rax)) {
-            printf("[%d] %s(2)\n", tid, syscall_name(orig_rax));
+            fprintf(stderr, "%d [%d] %s(2)\n", gettid(), t->tid, syscall_name(orig_rax));
         }
         else {
             if (t->in_syscall == true) {
+                int delay = get_delay_time();
                 t->in_syscall = false;
-                //int interval = rand () % delay;
-                printf("[%d] %s(2), usleep = %d\n", t->tid, syscall_name(orig_rax), delay);
+                fprintf(stderr, "%d [%d] %s(2), usleep = %d\n", gettid(), t->tid, syscall_name(orig_rax), delay);
                 usleep(delay);
             }
             else {
@@ -140,6 +137,7 @@ ptrace_loop(pid_t pid, int delay) {
         }
         ptrace(PTRACE_SYSCALL, t->tid, NULL, NULL);
     }
+    detach(t->tid);
 }
 
 int main (int argc, char **argv)
@@ -174,7 +172,7 @@ int main (int argc, char **argv)
         case 'p':
             pid = atoi(optarg);
             break;
-
+ 
         case 'd':
             delay = atoi(optarg);
             break;
@@ -192,9 +190,10 @@ int main (int argc, char **argv)
         errx(1, "--delay should be > 0");
     }
 
+    set_delay_time(delay);
     init_signal_handler();
     attach_all_threads(pid);
-    ptrace_loop(pid, delay);
-    detach(pid);
+    /* oh */
+    pause();
     exit(0);
 }

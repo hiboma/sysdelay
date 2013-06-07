@@ -14,7 +14,7 @@
 #include <stdbool.h>
 #include <sys/reg.h>
 #include <unistd.h>
-#include "uthash.h"
+#include <pthread.h>
 
 // TODO:
 // #if defined(I386)
@@ -347,10 +347,26 @@ static const char *sysent[] = {
 typedef struct thread_t {
     pid_t tid;
     bool in_syscall;
-    UT_hash_handle hh;
+    pthread_t *pthread;
 } thread;
 
 static thread *threads_attached = NULL;
 static bool _got_signal = false;
+static int delay = 0;
+
+void * handle_ptrace_loop(void *);
+void ptrace_loop(thread *);
+
+void set_delay_time(int val) {
+    delay = val;
+}
+
+int get_delay_time() {
+    return delay;
+}
+
+pid_t gettid(void) {
+    return syscall(SYS_gettid);
+}
 
 #endif
