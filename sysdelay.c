@@ -43,11 +43,8 @@ void attach_all_threads(pid_t pid) {
     sprintf(procdir, "/proc/%d/task", pid);
     dir = opendir(procdir);
     if (dir != NULL) {
-        unsigned int ntid = 0, nerr = 0;
         struct dirent *de;
-
         while ((de = readdir(dir)) != NULL) {
-            struct tcb *cur_tcp;
             int tid;
 
             if (de->d_fileno == 0)

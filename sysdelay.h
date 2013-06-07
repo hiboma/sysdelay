@@ -350,7 +350,6 @@ typedef struct thread_t {
     pthread_t *pthread;
 } thread;
 
-static thread *threads_attached = NULL;
 static bool _got_signal = false;
 static int delay = 0;
 
