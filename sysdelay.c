@@ -42,21 +42,23 @@ void attach_all_threads(pid_t pid) {
 
     sprintf(procdir, "/proc/%d/task", pid);
     dir = opendir(procdir);
-    if (dir != NULL) {
-        struct dirent *de;
-        while ((de = readdir(dir)) != NULL) {
-            int tid;
-
-            if (de->d_fileno == 0)
-                continue;
-
-            tid = atoi(de->d_name);
-            if (tid <= 0)
-                continue;
-            create_trace_thread(tid);
-        }
-        closedir(dir);
+    if (dir == NULL) {
+        errx(1, "The specified process (pid %d) does not exists", pid);
     }
+
+    struct dirent *de;
+    while ((de = readdir(dir)) != NULL) {
+        int tid;
+
+        if (de->d_fileno == 0)
+            continue;
+
+        tid = atoi(de->d_name);
+        if (tid <= 0)
+            continue;
+        create_trace_thread(tid);
+    }
+    closedir(dir);
 }
 
 bool ignored_syscall(unsigned int syscall) {
