@@ -14,12 +14,19 @@ void * handle_ptrace_loop(void *arg) {
     return NULL;
 }
 
-void attach(pid_t tid) {
+void create_trace_thread(pid_t tid) {
     thread *t     = xmalloc(sizeof(thread));
     t->tid        = tid;
     t->in_syscall = false;
     t->pthread    = xmalloc(sizeof(pthread_t));
     pthread_create(t->pthread, NULL, handle_ptrace_loop, t);
+}
+
+void attach(pid_t pid) {
+    int rc = ptrace(PTRACE_ATTACH, pid, 0, 0);
+    if (rc == -1) {
+        err(1, "failed to ptrace(PTRACE_ATTACH, %d, ..)", pid);
+    }
 }
 
 void detach(pid_t pid) {
@@ -29,8 +36,7 @@ void detach(pid_t pid) {
     }
 }
 
-static void attach_all_threads(pid_t pid) {
-
+void attach_all_threads(pid_t pid) {
     char procdir[sizeof("/proc/%d/task") + sizeof(int) * 3];
     DIR *dir;
 
@@ -50,7 +56,7 @@ static void attach_all_threads(pid_t pid) {
             tid = atoi(de->d_name);
             if (tid <= 0)
                 continue;
-            attach(tid);
+            create_trace_thread(tid);
         }
         closedir(dir);
     }
@@ -78,11 +84,11 @@ const char * syscall_name(long rax) {
     return sysent[rax];
 }
 
-static void signal_handler(int sig) {
+void signal_handler(int sig) {
    _got_signal = true;
 }
 
-static bool got_signal() {
+bool got_signal() {
     return _got_signal;
 }
 
@@ -103,10 +109,7 @@ void init_signal_handler() {
 void
 ptrace_loop(thread *t)
 {
-    int rc = ptrace(PTRACE_ATTACH, t->tid, 0, 0);
-    if (rc == -1) {
-        err(1, "failed to ptrace(PTRACE_ATTACH, %d, ..)");
-    }
+    attach(t->tid);
 
     while(!got_signal()){
         int status;
